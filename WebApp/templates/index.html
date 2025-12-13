@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MITRE Threat Engine</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        /* glossary btn */
+        .header { position: relative; }
+        .glossary-btn {
+            position: absolute;
+            top: 30px;
+            right: 30px;
+            background: transparent;
+            border: 1px solid #26a69a;
+            color: #26a69a;
+            padding: 10px 20px;
+            font-size: 0.8rem;
+            height: auto;
+        }
+        .glossary-btn:hover {
+            background: #26a69a;
+            color: black;
+            box-shadow: 0 0 15px rgba(38, 166, 154, 0.4);
+        }
+
+        /* terms list */
+        .term-item { margin-bottom: 15px; border-bottom: 1px solid #1f1f1f; padding-bottom: 10px; }
+        .term-title { color: #800000; font-family: 'Montserrat', sans-serif; font-weight: 700; font-size: 1.1rem; }
+        .term-def { color: #eceff1; margin-top: 5px; line-height: 1.4; font-size: 0.95rem; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>THREAT ENGINE</h1>
+        <div class="subtitle">MITRE ATT&CK Mapping System v6.0</div>
+        
+        <button class="glossary-btn" onclick="openGlossary()">📖 THREAT GLOSSARY</button>
+    </div>
+
+    <div class="container">
+        
+        <form class="search-box" method="POST" autocomplete="off">
+            
+            <input type="text" id="malwareInput" name="malware" list="malware-list" value="{{ search_term }}" required autocomplete="off">
+            
+            <datalist id="malware-list">
+                {% for name in catalog %}
+                    <option value="{{ name }}">
+                {% endfor %}
+            </datalist>
+
+            <button type="submit">SCAN</button>
+            <button type="button" class="browse-btn" onclick="openCatalog()">BROWSE MALWARE CATALOGUE</button>
+        </form>
+
+        {% if error %}
+            <div class="error-msg">⚠️ {{ error }}</div>
+        {% endif %}
+
+        {% if results %}
+            <div id="report-content">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-val">{{ results.name }}</div>
+                        <div class="stat-label">Identified Threat</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-val">{{ results.count }}</div>
+                        <div class="stat-label">TTPs Extracted</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-val" style="font-size: 1.1rem; word-break: break-all; line-height: 1.4; color: #ffffff;">
+                            {{ results.id }}
+                        </div>
+                        <div class="stat-label">STIX ID</div>
+                    </div>
+                </div>
+
+                <div class="dashboard-row">
+                    <div class="chart-panel">
+                        <h3 style="color: #b0bec5; margin-top: 0; font-family: 'Montserrat'; letter-spacing: 2px; text-transform: uppercase; font-size: 0.8rem; text-align: center; margin-bottom: 20px;">Attack Phase Distribution</h3>
+                        <div style="height: 300px; width: 100%; display: flex; justify-content: center;">
+                            <canvas id="attackChart"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="table-panel">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th width="12%">ID</th>
+                                    <th width="20%">Tactic (Phase)</th>
+                                    <th width="25%">Technique Name</th>
+                                    <th>Description</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for tech in results.techniques %}
+                                <tr onclick="showDetails('{{ tech.name }}', '{{ tech.id }}', '{{ tech.phase }}', '{{ tech.platforms }}', `{{ tech.full_desc }}`)" style="cursor: pointer;">
+                                    <td><span class="badge">{{ tech.id }}</span></td>
+                                    <td><span class="phase-tag">{{ tech.phase }}</span></td>
+                                    <td style="font-weight: bold; color: white;">{{ tech.name }}</td>
+                                    <td style="color: #b0bec5;">{{ tech.description }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 15px; margin-top: 10px; margin-bottom: 50px;">
+                <button onclick="downloadDashboard()" style="background: #26a69a; flex: 1; border: none;">📸 SAVE DASHBOARD PDF</button>
+                <a href="{{ url_for('download_playbook', name=results.name) }}" style="flex: 1; text-decoration: none;">
+                    <button style="background: #800000; width: 100%; border: 1px solid #4d0000;">📄 DOWNLOAD PLAYBOOK PDF</button>
+                </a>
+            </div>
+
+            <script>
+                // chart init
+                const ctx = document.getElementById('attackChart');
+                const chartData = {{ results.chart_data | tojson }};
+                new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: Object.keys(chartData),
+                        datasets: [{
+                            data: Object.values(chartData),
+                            backgroundColor: ['#800000', '#26a69a', '#ff3333', '#004d40', '#b0bec5', '#4d0000'],
+                            borderColor: '#140404', borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { position: 'bottom', labels: { color: '#b0bec5', font: { family: 'Lato', size: 10 }, padding: 20 } } }
+                    }
+                });
+
+                // pdf export
+                function downloadDashboard() {
+                    const element = document.getElementById('report-content');
+                    const opt = {
+                        margin: 0.2,
+                        filename: '{{ results.name }}_Dashboard.pdf',
+                        image: { type: 'jpeg', quality: 0.98 },
+                        html2canvas: { scale: 2, useCORS: true, scrollY: 0, backgroundColor: '#050505' },
+                        jsPDF: { unit: 'in', format: 'letter', orientation: 'landscape' },
+                        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+                    };
+                    html2pdf().set(opt).from(element).save();
+                }
+            </script>
+        {% endif %}
+    </div>
+
+    <div id="catalogModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <span class="close" onclick="closeCatalog()">&times;</span>
+                <h2 style="margin:0; font-family:'Montserrat'; color: #800000; text-transform: uppercase;">Malware Catalogue</h2>
+            </div>
+            <div id="catalogList">
+                {% for name in catalog %}
+                    <div class="catalog-item" onclick="selectMalware('{{ name }}')">{{ name }}</div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <div id="glossaryModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <span class="close" onclick="closeGlossary()">&times;</span>
+                <h2 style="margin:0; font-family:'Montserrat'; color: #26a69a; text-transform: uppercase;">THREAT GLOSSARY</h2>
+            </div>
+            <div style="padding: 20px;">
+                {% for term, definition in glossary.items() %}
+                    <div class="term-item">
+                        <div class="term-title">{{ term }}</div>
+                        <div class="term-def">{{ definition }}</div>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <div id="detailsModal" class="modal">
+        <div class="modal-content" style="border-color: #26a69a;">
+            <div class="modal-header" style="background: #004d40;">
+                <span class="close" onclick="closeDetails()">&times;</span>
+                <h2 id="modalTitle" style="margin:0; font-family:'Montserrat'; color: white; text-transform: uppercase;">Technique Name</h2>
+            </div>
+            <div style="padding: 20px;">
+                <p><strong>ID:</strong> <span id="modalID" style="color: white;"></span></p>
+                <p><strong>Phase:</strong> <span id="modalPhase" style="color: #26a69a;"></span></p>
+                <p><strong>Platforms:</strong> <span id="modalPlatforms" style="color: #b0bec5;"></span></p>
+                <hr style="border-color: #333;">
+                <p style="color: #eceff1; line-height: 1.6;" id="modalDesc"></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // modal logic
+        function openCatalog() { document.getElementById("catalogModal").style.display = "block"; }
+        function closeCatalog() { document.getElementById("catalogModal").style.display = "none"; }
+        function selectMalware(name) { document.getElementById("malwareInput").value = name; closeCatalog(); }
+
+        function openGlossary() { document.getElementById("glossaryModal").style.display = "block"; }
+        function closeGlossary() { document.getElementById("glossaryModal").style.display = "none"; }
+
+        function showDetails(name, id, phase, platforms, desc) {
+            document.getElementById("modalTitle").innerText = name;
+            document.getElementById("modalID").innerText = id;
+            document.getElementById("modalPhase").innerText = phase;
+            document.getElementById("modalPlatforms").innerText = platforms;
+            document.getElementById("modalDesc").innerText = desc;
+            document.getElementById("detailsModal").style.display = "block";
+        }
+        function closeDetails() { document.getElementById("detailsModal").style.display = "none"; }
+
+        window.onclick = function(event) {
+            if (event.target == document.getElementById("catalogModal")) closeCatalog();
+            if (event.target == document.getElementById("glossaryModal")) closeGlossary();
+            if (event.target == document.getElementById("detailsModal")) closeDetails();
+        }
+    </script>
+</body>
+</html>
