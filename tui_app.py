@@ -232,7 +232,7 @@ class ThreatIntelApp(App):
                 subprocess.call(['xdg-open', self.current_playbook])
             elif sys.platform == 'win32':
                 os.startfile(self.current_playbook)
-
+#main
 if __name__ == "__main__":
     app = ThreatIntelApp()
     app.run()
