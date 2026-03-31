@@ -48,7 +48,7 @@ def load_catalog():
     global malware_catalog
 
     try:
-        data = requests.get(f"{ATTACK_API}/search?params=rat").json()
+        data = requests.get(f"{ATTACK_API}/search?params=").json()
 
         names = []
 
@@ -160,128 +160,94 @@ def index():
         # MITRE SEARCH (API)
         # =========================
 
+        # =========================
+        # MITRE SEARCH (API)
+        # =========================
+
         if search_term:
-
             try:
+                search = requests.get(f"{ATTACK_API}/search?params={search_term}").json()
+                data = None
+                entity_type = ""
+                entity_id = ""
 
-                search = requests.get(
-                    f"{ATTACK_API}/search?params={search_term}"
-                ).json()
-
-                if "Malwares" not in search:
-
+                categories_to_check = ["Actors", "Malwares", "Tools", "Campaigns"]
+                
+                for cat in categories_to_check:
+                    if cat in search:
+                        entity_type = cat.lower().rstrip('s')  
+                        entity_id = list(search[cat].keys())[0]
+                        data = requests.get(f"{ATTACK_API}/explore/{cat}/{entity_id}").json()
+                        break
+                
+                if not data:
                     error = f"No results found for '{search_term}'."
 
                 else:
-
-                    malware_id = list(search["Malwares"].keys())[0]
-
-                    data = requests.get(
-                        f"{ATTACK_API}/explore/Malwares/{malware_id}"
-                    ).json()
-
                     metadata = data.get("Metadata", {})
 
-                    malware_name = metadata.get("name", ["Unknown"])[0]
-                    malware_desc = clean_text(metadata.get("description", ["No description"])[0])
-                    malware_url = metadata.get("url", [""])[0]
+                    entity_name = metadata.get("name", ["Unknown"])[0]
+                    entity_desc = clean_text(metadata.get("description", ["No description"])[0])
+                    entity_url = metadata.get("url", [""])[0]
+                    
+                    aliases = ", ".join(metadata.get("name", [])[1:]) if len(metadata.get("name", [])) > 1 else "None known"
 
                     techniques = data.get("Techniques", {})
                     mitigations = data.get("Mitigations", {})
+                    
                     actors_data = data.get("Actors", {})
+                    malwares_data = data.get("Malwares", {})
                     tools_data = data.get("Tools", {})
 
                     clean_techs = []
                     phase_counts = {}
-
-                    # SAFE ATTACK SURFACE COLLECTION
                     platforms_set = set()
 
                     for tid, t in techniques.items():
-
                         name = t["name"][0]
                         desc = clean_text(t["description"][0])
-
                         platforms = t.get("platforms", [])
                         for p in platforms:
                             platforms_set.add(p)
 
                         base = tid.split(".")[0]
-
-                        # DO NOT TOUCH THIS LOGIC (avoids "other bug")
-
-                        if base.startswith("T10"):
-                            phase = "execution"
-                        elif base.startswith("T11"):
-                            phase = "credential-access"
-                        elif base.startswith("T12"):
-                            phase = "initial-access"
-                        elif base.startswith("T15"):
-                            phase = "defense-evasion"
-                        else:
-                            phase = "other"
+                        if base.startswith("T10"): phase = "execution"
+                        elif base.startswith("T11"): phase = "credential-access"
+                        elif base.startswith("T12"): phase = "initial-access"
+                        elif base.startswith("T15"): phase = "defense-evasion"
+                        else: phase = "other"
 
                         phase_counts[phase] = phase_counts.get(phase, 0) + 1
 
                         clean_techs.append({
-                            "id": tid,
-                            "name": name,
-                            "description": desc[:300] + "...",
-                            "full_desc": desc,
-                            "phase": phase,
-                            "platforms": "Unknown"
+                            "id": tid, "name": name,
+                            "description": desc[:300] + "...", "full_desc": desc,
+                            "phase": phase, "platforms": "Unknown"
                         })
 
-                    defenses_list = []
-
-                    for mid, m in mitigations.items():
-
-                        mname = m["name"][0]
-                        mdesc = m["description"][0][:200] + "..."
-
-                        defenses_list.append(f"{mname}: {mdesc}")
-
-                    actors = []
-
-                    for aid, a in actors_data.items():
-
-                        actors.append({
-                            "name": a["name"][0],
-                            "description": clean_text(a["description"][0])[:200] + "..."
-                        })
-
-                    tools = []
-
-                    for tid, t in tools_data.items():
-
-                        tools.append({
-                            "name": t["name"][0],
-                            "description": clean_text(t["description"][0])[:200] + "..."
-                        })
+                    defenses_list = [f'{m["name"][0]}: {m["description"][0][:200]}...' for mid, m in mitigations.items()]
+                    
+                    actors = [{"name": a["name"][0], "description": clean_text(a["description"][0])} for aid, a in actors_data.items() if aid != entity_id]
+                    malwares = [{"name": m["name"][0], "description": clean_text(m["description"][0])} for mid, m in malwares_data.items() if mid != entity_id]
+                    tools = [{"name": t["name"][0], "description": clean_text(t["description"][0])} for tid, t in tools_data.items() if tid != entity_id]
 
                     count = len(clean_techs)
-
-                    if count <= 5:
-                        risk_level = "LOW"
-                        risk_score = 25
-                    elif count <= 10:
-                        risk_level = "MEDIUM"
-                        risk_score = 50
-                    elif count <= 20:
-                        risk_level = "HIGH"
-                        risk_score = 75
-                    else:
-                        risk_level = "CRITICAL"
-                        risk_score = 100
+                    if count <= 5: risk_level, risk_score = "LOW", 25
+                    elif count <= 10: risk_level, risk_score = "MEDIUM", 50
+                    elif count <= 20: risk_level, risk_score = "HIGH", 75
+                    else: risk_level, risk_score = "CRITICAL", 100
 
                     results = {
-                        "name": malware_name,
-                        "description": malware_desc,
-                        "url": malware_url,
+                        "type": entity_type, 
+                        "name": entity_name,
+                        "description": entity_desc,
+                        "url": entity_url,
+                        "aliases": aliases,
                         "actors": actors,
+                        "malwares": malwares,
                         "tools": tools,
-                        "platforms": list(platforms_set),  # ATTACK SURFACE
-                        "id": malware_id,
+                        "platforms": list(platforms_set),
+                        "id": entity_id,
                         "count": count,
                         "risk": risk_level,
                         "risk_score": risk_score,
@@ -290,10 +256,10 @@ def index():
                         "defenses": defenses_list
                     }
 
-                    generate_pdf_report(malware_name, clean_techs, defenses_list)
+                    generate_pdf_report(entity_name, clean_techs, defenses_list)
 
             except Exception as e:
-                error = str(e)
+                error = f"API Error: {str(e)}"
 
     return render_template(
         'index.html',

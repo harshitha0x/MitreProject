@@ -12,7 +12,26 @@
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        .hover-expand {
+            display: -webkit-box;
+            -webkit-line-clamp: 3; 
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            color: #b0bec5;
+            font-size: 0.9rem;
+            margin-top: 5px;
+            cursor: default;
+        }
 
+        .hover-expand:hover {
+            -webkit-line-clamp: unset; 
+            background: rgba(255, 255, 255, 0.05); 
+            padding: 8px;
+            border-radius: 6px;
+            margin-left: -8px; 
+        }
+    </style>
 </head>
 
 
@@ -25,11 +44,11 @@
         <h1>THREAT ENGINE</h1>
 
         <div class="subtitle">
-            MITRE ATT&CK Mapping System v6.0
+            MITRE ATT&CK Mapping System 
         </div>
 
         <button class="glossary-btn" onclick="openGlossary()">
-            📖 THREAT GLOSSARY
+             THREAT GLOSSARY
         </button>
 
     </div>
@@ -128,97 +147,75 @@
 
             </div>
 
-            <!-- MALWARE INTELLIGENCE -->
-
             <div class="intel-grid">
 
                 <div class="intel-card">
+                    {% if results.type == 'actor' %}
+                        <h3 class="intel-title" style="color:#ffb300;"> Threat Actor Profile</h3>
+                    {% elif results.type == 'tool' %}
+                        <h3 class="intel-title" style="color:#4db6ac;"> Attack Tool Profile</h3>
+                    {% elif results.type == 'campaign' %}
+                        <h3 class="intel-title" style="color:#ba68c8;"> Campaign Profile</h3>
+                    {% else %}
+                        <h3 class="intel-title" style="color:#ef5350;"> Malware Intelligence</h3>
+                    {% endif %}
+                    
+                    <p><strong>Known Aliases:</strong> <span style="color:#b0bec5;">{{ results.aliases }}</span></p>
 
-                    <h3 class="intel-title">Malware Intelligence</h3>
-
-                    <p style="color:#b0bec5;line-height:1.6;">
+                    <p style="color:#b0bec5;line-height:1.6;margin-top:10px;">
                         {{ results.description }}
                     </p>
-
-                    <a href="{{ results.url }}" target="_blank" class="intel-link">
-                        View on MITRE ATT&CK →
-                    </a>
-
+                    <a href="{{ results.url }}" target="_blank" class="intel-link" style="color: #4db6ac; text-decoration: none; font-weight: bold; display: inline-block; margin-top: 15px;">View on MITRE ATT&CK →</a>
                 </div>
 
-
                 <div class="intel-card">
-
-                    <h3 class="intel-title">Threat Actors</h3>
-
+                    <h3 class="intel-title">Associated Entities</h3>
+                    
                     {% if results.actors %}
-
-                    <ul class="intel-list">
-
-                        {% for actor in results.actors %}
-
-                        <li>
-
-                            <strong>{{ actor.name }}</strong>
-
-                            <div class="intel-desc">
-                                {{ actor.description }}
-                            </div>
-
-                        </li>
-
-                        {% endfor %}
-
-                    </ul>
-
-                    {% else %}
-
-                    <div class="intel-empty">
-                        No threat actors available
-                    </div>
-
+                        <h4 style="color:#ffb300; margin-bottom:5px; margin-top:15px; font-size: 0.9rem;">THREAT ACTORS</h4>
+                        <ul class="intel-list">
+                            {% for actor in results.actors %}
+                                <li>
+                                    <strong style="color: white; font-size: 1rem; position: relative; z-index: 1000;">{{ actor.name }}</strong>
+                                    <div class="hover-expand-popup">{{ actor.description }}</div>
+                                </li>
+                            {% endfor %}
+                        </ul>
                     {% endif %}
 
+                    {% if results.malwares %}
+                        <h4 style="color:#ef5350; margin-bottom:5px; margin-top:15px; font-size: 0.9rem;">KNOWN MALWARE</h4>
+                        <ul class="intel-list">
+                            {% for m in results.malwares %}
+                                <li>
+                                    <strong style="color: white; font-size: 1rem; position: relative; z-index: 1000;">{{ m.name }}</strong>
+                                    <div class="hover-expand-popup">{{ m.description }}</div>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+                    
+                    {% if not results.actors and not results.malwares %}
+                        <div class="intel-empty">No associated Actors or Malware found.</div>
+                    {% endif %}
                 </div>
-
 
                 <div class="intel-card">
-
                     <h3 class="intel-title">Attack Tools</h3>
-
                     {% if results.tools %}
-
-                    <ul class="intel-list">
-
-                        {% for tool in results.tools %}
-
-                        <li>
-
-                            <strong>{{ tool.name }}</strong>
-
-                            <div class="intel-desc">
-                                {{ tool.description }}
-                            </div>
-
-                        </li>
-
-                        {% endfor %}
-
-                    </ul>
-
+                        <ul class="intel-list">
+                            {% for tool in results.tools %}
+                                <li>
+                                    <strong style="color: white; font-size: 1rem; position: relative; z-index: 1000;">{{ tool.name }}</strong>
+                                    <div class="hover-expand-popup">{{ tool.description }}</div>
+                                </li>
+                            {% endfor %}
+                        </ul>
                     {% else %}
-
-                    <div class="intel-empty">
-                        No tools available
-                    </div>
-
+                        <div class="intel-empty">No tools available</div>
                     {% endif %}
-
                 </div>
-
             </div>
-
-            <!-- KILL CHAIN TIMELINE -->
 
             <div class="killchain-panel">
 
