@@ -134,7 +134,8 @@ def index():
 
     if request.method == 'POST':
 
-        search_term = request.form.get('malware', '').strip()
+        search_term = request.form.get('search_query', request.form.get('malware', '')).strip()
+        search_category = request.form.get('category', 'Auto')
         ip = request.form.get("ip")
         file = request.files.get("file")
 
@@ -156,41 +157,48 @@ def index():
             if vt_data:
                 vt_result = vt_data["data"]["attributes"]["last_analysis_stats"]
 
-        # =========================
         # MITRE SEARCH (API)
-        # =========================
-
-        # =========================
-        # MITRE SEARCH (API)
-        # =========================
-
+        
         if search_term:
             try:
                 search = requests.get(f"{ATTACK_API}/search?params={search_term}").json()
                 data = None
                 entity_type = ""
                 entity_id = ""
-
-                categories_to_check = ["Actors", "Malwares", "Tools", "Campaigns"]
-                
+                if search_category == "Auto":
+                    categories_to_check = ["Actors", "Malwares", "Tools", "Campaigns", "Techniques", "Tactics", "Mitigations", "Data Sources"]
+                else:
+                    categories_to_check = [search_category]
                 for cat in categories_to_check:
                     if cat in search:
-                        entity_type = cat.lower().rstrip('s')  
+                        entity_type = cat.upper()
                         entity_id = list(search[cat].keys())[0]
                         data = requests.get(f"{ATTACK_API}/explore/{cat}/{entity_id}").json()
                         break
                 
                 if not data:
-                    error = f"No results found for '{search_term}'."
+                    error = f"No results found for '{search_term}' in category '{search_category}'."
 
                 else:
                     metadata = data.get("Metadata", {})
-
                     entity_name = metadata.get("name", ["Unknown"])[0]
                     entity_desc = clean_text(metadata.get("description", ["No description"])[0])
-                    entity_url = metadata.get("url", [""])[0]
-                    
+                    entity_url = metadata.get("url", [""])[0] 
                     aliases = ", ".join(metadata.get("name", [])[1:]) if len(metadata.get("name", [])) > 1 else "None known"
+                    related_data = {}
+                    all_categories = ["Actors", "Campaigns", "Malwares", "Tools", "Tactics", "Techniques", "Mitigations", "Data Sources"]
+                    
+                    for cat in all_categories:
+                        if cat in data:
+                            items = []
+                            for item_id, item_metadata in data[cat].items():
+                                if item_id != entity_id: # Don't link to itself
+                                    i_name = item_metadata.get("name", ["Unknown"])[0]
+                                    i_desc = clean_text(item_metadata.get("description", [""])[0])
+                                    items.append({"name": i_name, "description": i_desc})
+                            
+                            if items:
+                                related_data[cat] = items
 
                     techniques = data.get("Techniques", {})
                     mitigations = data.get("Mitigations", {})
@@ -204,11 +212,10 @@ def index():
                     platforms_set = set()
 
                     for tid, t in techniques.items():
+                        if tid == entity_id: continue
                         name = t["name"][0]
                         desc = clean_text(t["description"][0])
-                        platforms = t.get("platforms", [])
-                        for p in platforms:
-                            platforms_set.add(p)
+                        for p in t.get("platforms", []): platforms_set.add(p)
 
                         base = tid.split(".")[0]
                         if base.startswith("T10"): phase = "execution"
@@ -218,18 +225,9 @@ def index():
                         else: phase = "other"
 
                         phase_counts[phase] = phase_counts.get(phase, 0) + 1
-
-                        clean_techs.append({
-                            "id": tid, "name": name,
-                            "description": desc[:300] + "...", "full_desc": desc,
-                            "phase": phase, "platforms": "Unknown"
-                        })
+                        clean_techs.append({"id": tid, "name": name, "description": desc[:300] + "...", "full_desc": desc, "phase": phase, "platforms": "Unknown"})
 
                     defenses_list = [f'{m["name"][0]}: {m["description"][0][:200]}...' for mid, m in mitigations.items()]
-                    
-                    actors = [{"name": a["name"][0], "description": clean_text(a["description"][0])} for aid, a in actors_data.items() if aid != entity_id]
-                    malwares = [{"name": m["name"][0], "description": clean_text(m["description"][0])} for mid, m in malwares_data.items() if mid != entity_id]
-                    tools = [{"name": t["name"][0], "description": clean_text(t["description"][0])} for tid, t in tools_data.items() if tid != entity_id]
 
                     count = len(clean_techs)
                     if count <= 5: risk_level, risk_score = "LOW", 25
@@ -243,9 +241,6 @@ def index():
                         "description": entity_desc,
                         "url": entity_url,
                         "aliases": aliases,
-                        "actors": actors,
-                        "malwares": malwares,
-                        "tools": tools,
                         "platforms": list(platforms_set),
                         "id": entity_id,
                         "count": count,
@@ -253,7 +248,8 @@ def index():
                         "risk_score": risk_score,
                         "techniques": clean_techs,
                         "chart_data": phase_counts,
-                        "defenses": defenses_list
+                        "defenses": defenses_list,
+                        "related": related_data
                     }
 
                     generate_pdf_report(entity_name, clean_techs, defenses_list)

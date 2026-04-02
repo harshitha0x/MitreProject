@@ -56,52 +56,43 @@
 
     <div class="container">
 
+        <form class="search-box" method="POST" autocomplete="off" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+            
+            <select name="category" style="padding: 12px; background: #1e1e1e; color: #4db6ac; border: 1px solid #333; border-radius: 6px; outline: none; font-weight: bold; cursor: pointer;">
+                <option value="Auto">Auto-Detect</option>
+                <option value="Actors">Threat Actors</option>
+                <option value="Malwares">Malware</option>
+                <option value="Tools">Tools</option>
+                <option value="Campaigns">Campaigns</option>
+                <option value="Tactics">Tactics</option>
+                <option value="Techniques">Techniques</option>
+                <option value="Mitigations">Mitigations</option>
+                <option value="Data Sources">Data Sources</option>
+            </select>
 
-        <!-- MALWARE SEARCH -->
-
-        <form class="search-box" method="POST" autocomplete="off">
-
-            <input type="text" id="malwareInput" name="malware" list="malware-list" value="{{ search_term }}" required
-                autocomplete="off">
+            <input type="text" id="malwareInput" name="search_query" list="malware-list" value="{{ search_term }}" required autocomplete="off" placeholder="Search the database..." style="flex: 1; min-width: 250px;">
 
             <datalist id="malware-list">
-
                 {% for name in catalog %}
                 <option value="{{ name }}">
-                    {% endfor %}
-
+                {% endfor %}
             </datalist>
 
-            <button type="submit">
-                SCAN
-            </button>
-
-            <button type="button" class="browse-btn" onclick="openCatalog()">
-                BROWSE MALWARE CATALOGUE
-            </button>
-
+            <button type="submit">SCAN</button>
+            <button type="button" class="browse-btn" onclick="openCatalog()">CATALOGUE</button>
         </form>
-
-        <!-- ERROR -->
 
         {% if error %}
 
         <div class="error-msg">
-            ⚠️ {{ error }}
+             {{ error }}
         </div>
 
         {% endif %}
 
-
-
-        <!-- RESULTS -->
-
         {% if results %}
 
         <div id="report-content" style="margin-top:30px;">
-
-
-            <!-- STATS -->
 
             <div class="stats-grid">
 
@@ -123,44 +114,30 @@
                 </div>
 
             </div>
-
-            <!-- THREAT SEVERITY -->
-
+    
+            {% if results.count > 0 %}
             <div class="severity-panel">
-
                 <h3 class="severity-title">
                     Threat Severity Assessment
                 </h3>
-
                 <div class="severity-bar">
-
                     <div class="severity-fill" style="width: {{ results.risk_score }}%">
                     </div>
-
                 </div>
-
                 <div class="severity-label">
-
                     {{ results.risk }} RISK
-
                 </div>
-
             </div>
+            {% endif %}
 
             <div class="intel-grid">
 
                 <div class="intel-card">
-                    {% if results.type == 'actor' %}
-                        <h3 class="intel-title" style="color:#ffb300;"> Threat Actor Profile</h3>
-                    {% elif results.type == 'tool' %}
-                        <h3 class="intel-title" style="color:#4db6ac;"> Attack Tool Profile</h3>
-                    {% elif results.type == 'campaign' %}
-                        <h3 class="intel-title" style="color:#ba68c8;"> Campaign Profile</h3>
-                    {% else %}
-                        <h3 class="intel-title" style="color:#ef5350;"> Malware Intelligence</h3>
-                    {% endif %}
+                    <h3 class="intel-title" style="color:#ffb300;">{{ results.type }} PROFILE</h3>
                     
+                    {% if results.aliases != "None known" %}
                     <p><strong>Known Aliases:</strong> <span style="color:#b0bec5;">{{ results.aliases }}</span></p>
+                    {% endif %}
 
                     <p style="color:#b0bec5;line-height:1.6;margin-top:10px;">
                         {{ results.description }}
@@ -168,157 +145,78 @@
                     <a href="{{ results.url }}" target="_blank" class="intel-link" style="color: #4db6ac; text-decoration: none; font-weight: bold; display: inline-block; margin-top: 15px;">View on MITRE ATT&CK →</a>
                 </div>
 
+                {% for category_name, items in results.related.items() %}
                 <div class="intel-card">
-                    <h3 class="intel-title">Associated Entities</h3>
-                    
-                    {% if results.actors %}
-                        <h4 style="color:#ffb300; margin-bottom:5px; margin-top:15px; font-size: 0.9rem;">THREAT ACTORS</h4>
-                        <ul class="intel-list">
-                            {% for actor in results.actors %}
-                                <li>
-                                    <strong style="color: white; font-size: 1rem; position: relative; z-index: 1000;">{{ actor.name }}</strong>
-                                    <div class="hover-expand-popup">{{ actor.description }}</div>
-                                </li>
-                            {% endfor %}
-                        </ul>
-                    {% endif %}
-
-                    {% if results.malwares %}
-                        <h4 style="color:#ef5350; margin-bottom:5px; margin-top:15px; font-size: 0.9rem;">KNOWN MALWARE</h4>
-                        <ul class="intel-list">
-                            {% for m in results.malwares %}
-                                <li>
-                                    <strong style="color: white; font-size: 1rem; position: relative; z-index: 1000;">{{ m.name }}</strong>
-                                    <div class="hover-expand-popup">{{ m.description }}</div>
-                                </li>
-                            {% endfor %}
-                        </ul>
-                    {% endif %}
-                    
-                    {% if not results.actors and not results.malwares %}
-                        <div class="intel-empty">No associated Actors or Malware found.</div>
-                    {% endif %}
+                    <h3 class="intel-title" style="color:#4db6ac;">Related {{ category_name }}</h3>
+                    <ul class="intel-list">
+                        {% for item in items %}
+                            <li>
+                                <strong style="color: white; font-size: 1rem; position: relative; z-index: 1000;">{{ item.name }}</strong>
+                                <div class="hover-expand-popup">{{ item.description }}</div>
+                            </li>
+                        {% endfor %}
+                    </ul>
                 </div>
+                {% endfor %}
 
-                <div class="intel-card">
-                    <h3 class="intel-title">Attack Tools</h3>
-                    {% if results.tools %}
-                        <ul class="intel-list">
-                            {% for tool in results.tools %}
-                                <li>
-                                    <strong style="color: white; font-size: 1rem; position: relative; z-index: 1000;">{{ tool.name }}</strong>
-                                    <div class="hover-expand-popup">{{ tool.description }}</div>
-                                </li>
-                            {% endfor %}
-                        </ul>
-                    {% else %}
-                        <div class="intel-empty">No tools available</div>
-                    {% endif %}
-                </div>
-            </div>
-
+            </div>            
+            {% if results.count > 0 %}
             <div class="killchain-panel">
-
-                <h3 class="killchain-title">
-                    Attack Kill Chain Timeline
-                </h3>
-
+                <h3 class="killchain-title">Attack Kill Chain Timeline</h3>
                 <div class="killchain-flow">
-
                     {% set phases = [] %}
-
                     {% for tech in results.techniques %}
-                    {% if tech.phase not in phases %}
-                    {% set _ = phases.append(tech.phase) %}
-                    {% endif %}
+                        {% if tech.phase not in phases %}
+                            {% set _ = phases.append(tech.phase) %}
+                        {% endif %}
                     {% endfor %}
-
                     {% for phase in phases %}
-
-                    <div class="kill-step">
-                        {{ phase.replace('-', ' ').title() }}
-                    </div>
-
-                    {% if not loop.last %}
-                    <div class="kill-arrow">→</div>
-                    {% endif %}
-
+                        <div class="kill-step">{{ phase.replace('-', ' ').title() }}</div>
+                        {% if not loop.last %}<div class="kill-arrow">→</div>{% endif %}
                     {% endfor %}
-
                 </div>
-
             </div>
-
-            <!-- DASHBOARD -->
-
             <div class="dashboard-row">
-
-
-                <!-- CHART -->
-
                 <div class="chart-panel">
-
-                    <h3 style="color:#b0bec5;text-align:center;font-size:0.8rem;">
-                        Attack Phase Distribution
-                    </h3>
-
+                    <h3 style="color:#b0bec5;text-align:center;font-size:0.8rem;">Attack Phase Distribution</h3>
                     <div style="height:300px;">
                         <canvas id="attackChart"></canvas>
                     </div>
-
                 </div>
-
-
-                <!-- TABLE -->
-
                 <div class="table-panel">
-
                     <table>
-
                         <thead>
-
                             <tr>
                                 <th>ID</th>
                                 <th>Tactic</th>
                                 <th>Technique</th>
                                 <th>Description</th>
                             </tr>
-
                         </thead>
-
                         <tbody>
-
                             {% for tech in results.techniques %}
-
-                            <tr
-                                onclick="showDetails('{{ tech.name }}','{{ tech.id }}','{{ tech.phase }}','{{ tech.platforms }}',`{{ tech.full_desc }}`)">
-
+                            <tr onclick="showDetails('{{ tech.name }}','{{ tech.id }}','{{ tech.phase }}','{{ tech.platforms }}',`{{ tech.full_desc }}`)">
                                 <td>{{ tech.id }}</td>
-
                                 <td>{{ tech.phase }}</td>
-
-                                <td style="font-weight:bold;color:white;">
-                                    {{ tech.name }}
-                                </td>
-
-                                <td style="color:#b0bec5;">
-                                    {{ tech.description }}
-                                </td>
-
+                                <td style="font-weight:bold;color:white;">{{ tech.name }}</td>
+                                <td style="color:#b0bec5;">{{ tech.description }}</td>
                             </tr>
-
                             {% endfor %}
-
                         </tbody>
-
                     </table>
-
                 </div>
-
             </div>
 
-        </div>
+            {% else %}
+            
+            <div style="text-align: center; color: #b0bec5; margin-top: 40px; margin-bottom: 40px; padding: 40px; background: rgba(255,255,255,0.02); border-radius: 8px; border: 1px dashed rgba(255,255,255,0.1);">
+                <h3 style="color: #4db6ac; margin-bottom: 10px;"> No Technical Mapping (TTPs) Found</h3>
+                <p style="font-size: 0.95rem; opacity: 0.8; line-height: 1.6;">
+                    This entity does not contain a direct attack sequence or specific MITRE techniques in the database. <br>
+                </p>
+            </div>
 
+            {% endif %}
 
         <!-- EXPORT BUTTONS -->
 
@@ -326,14 +224,14 @@
 
             <button onclick="downloadDashboard()"
                 style="background:#26a69a;flex:1;border:none;height:50px;color:white;font-weight:bold;cursor:pointer;">
-                📸 SAVE DASHBOARD PDF
+                 SAVE DASHBOARD PDF
             </button>
 
             <a href="{{ url_for('download_playbook', name=results.name) }}" style="flex:1;">
 
                 <button
                     style="background:#800000;width:100%;border:none;height:50px;color:white;font-weight:bold;cursor:pointer;">
-                    📄 DOWNLOAD PLAYBOOK PDF
+                     DOWNLOAD PLAYBOOK PDF
                 </button>
 
             </a>
