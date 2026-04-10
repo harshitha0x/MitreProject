@@ -10,7 +10,9 @@
 # I would like to thank MITRE for the permissive licence under which
 # ATT&CK® is available.
 #
-
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'config'))
 import argparse
 import collections
 import itertools
@@ -31,7 +33,6 @@ from config.matrixtable import Matrices
 from fastapi import FastAPI, HTTPException, Request, Query
 from fastapi.responses import JSONResponse, RedirectResponse
 from typing import Optional
-
 
 hashmap = {
     'fgdsid': 'Data Sources',
@@ -405,14 +406,19 @@ def search(options, params=[]):
 def loadCache(options):
     cachefile = pathlib.Path(options.cachefile)
     if options.verbose:
-        logging.info('Loading cache ' + cache.name + '...')
+        logging.info('Loading cache ' + str(cachefile.name) + '...')
+    if not cachefile.exists():
+        return {}
     try:
-        with open(cachefile, 'r') as cache:
-            return json.loads(cache.read())
-    except (ValueError, FileNotFoundError):
+        with open(cachefile, 'r') as f:
+            content = f.read()
+            if not content:
+                return {}
+            return json.loads(content)
+    except (ValueError, FileNotFoundError, json.JSONDecodeError):
         if options.verbose:
-            logging.error('Error loading the cachefile ' + cachefile.name)
-
+            logging.error('Error loading the cachefile ' + str(cachefile.name))
+        return {}
 
 def GenerateMatrix(options):
     merged = collections.defaultdict(lambda: dict())

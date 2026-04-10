@@ -1,480 +1,502 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
     <title>MITRE Threat Engine</title>
-
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        .cat-tabs { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+        .cat-tab {
+            padding:7px 16px; border-radius:20px; border:1px solid #3d0c0c;
+            background:#0a0a0a; color:#b0bec5; font-family:'Montserrat',sans-serif;
+            font-size:0.72rem; font-weight:700; cursor:pointer; letter-spacing:1px; transition:0.2s;
+        }
+        .cat-tab:hover { background:#1a0505; color:white; }
+        .cat-tab.active { background:#800000; color:white; border-color:#800000; box-shadow:0 0 12px rgba(128,0,0,0.4); }
 
+        .smart-wrap { position:relative; flex:1; min-width:250px; }
+        .smart-wrap input { width:100%; box-sizing:border-box; }
+
+        #suggBox {
+            position:absolute; top:100%; left:0; right:0;
+            background:#0f0f0f; border:1px solid #3d0c0c; border-top:none;
+            border-radius:0 0 8px 8px; max-height:280px; overflow-y:auto; z-index:999; display:none;
+        }
+        .sug-item {
+            padding:9px 15px; color:#b0bec5; cursor:pointer; font-size:0.87rem;
+            border-bottom:1px solid #140a0a; transition:0.12s; display:flex; justify-content:space-between; align-items:center;
+        }
+        .sug-item:hover, .sug-item.hi { background:#800000; color:white; }
+        .sug-badge {
+            font-size:0.65rem; letter-spacing:1px; color:#555; background:#1a0505;
+            padding:2px 7px; border-radius:20px; border:1px solid #3d0c0c;
+        }
+        .sug-item:hover .sug-badge, .sug-item.hi .sug-badge { background:#600000; color:#ddd; border-color:#800000; }
+
+        .search-hint { font-size:0.7rem; color:#4db6ac; letter-spacing:1.5px; margin-bottom:6px; }
+
+        .intel-list { list-style:none; padding:0; margin:0; }
+        .intel-list li { padding:9px 0; border-bottom:1px solid #1a0505; }
+        .intel-list li:last-child { border-bottom:none; }
+        .intel-list li strong { color:white; font-size:0.93rem; }
+        .cat-label {
+            display:inline-block; background:#1a0505; border:1px solid #3d0c0c;
+            color:#4db6ac; font-size:0.65rem; font-weight:700; letter-spacing:1px;
+            padding:2px 8px; border-radius:20px; margin-bottom:8px;
+        }
+        .hover-desc {
+            display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
+            overflow:hidden; color:#b0bec5; font-size:0.84rem; margin-top:3px; cursor:default;
+        }
+        .hover-desc:hover {
+            -webkit-line-clamp:unset; background:rgba(255,255,255,0.03);
+            padding:5px; border-radius:4px;
+        }
+
+        /* Catalog modal tabs */
+        .modal-cat-tabs { display:flex; gap:6px; flex-wrap:wrap; padding:12px 15px; border-bottom:1px solid #1f0505; }
+        .modal-cat-tab {
+            background:#0a0a0a; border:1px solid #3d0c0c; color:#b0bec5;
+            padding:5px 11px; border-radius:20px; cursor:pointer; font-size:0.68rem;
+            font-weight:700; font-family:'Montserrat',sans-serif; letter-spacing:1px; transition:0.2s;
+        }
+        .modal-cat-tab.active { background:#800000; color:white; border-color:#800000; }
+
+        /* Catalog search box */
+        .modal-search { padding:10px 15px; border-bottom:1px solid #1f0505; }
+        .modal-search input {
+            width:100%; box-sizing:border-box; background:#0a0a0a; border:1px solid #1f1f1f;
+            color:white; padding:9px 12px; border-radius:6px; outline:none; font-size:0.88rem;
+        }
+
+        .catalog-count { font-size:0.7rem; color:#555; padding:8px 15px; }
+    </style>
 </head>
-
-
 <body>
 
-    <!-- HEADER -->
+<div class="header">
+    <h1>THREAT ENGINE</h1>
+    <div class="subtitle">MITRE ATT&CK Mapping System</div>
+    <button class="glossary-btn" onclick="openGlossary()">THREAT GLOSSARY</button>
+</div>
 
-    <div class="header">
+<div class="container">
 
-        <h1>THREAT ENGINE</h1>
+  
+    <form class="search-box" method="POST" autocomplete="off" id="mainForm" style="flex-direction:column;gap:12px;">
 
-        <div class="subtitle">
-            MITRE ATT&CK Mapping System v6.0
+   
+        <div>
+            <div class="search-hint">SELECT CATEGORY</div>
+            <div class="cat-tabs" id="catTabs">
+                <div class="cat-tab active" data-cat="Auto" onclick="selectCat(this)">ALL</div>
+                {% for cat in category_order %}
+                <div class="cat-tab" data-cat="{{ cat }}" onclick="selectCat(this)">{{ cat | upper }}</div>
+                {% endfor %}
+            </div>
+            <input type="hidden" name="category" id="categoryInput" value="Auto">
         </div>
 
-        <button class="glossary-btn" onclick="openGlossary()">
-            📖 THREAT GLOSSARY
-        </button>
+       
+        <div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap;">
+            <div class="smart-wrap">
+                <input type="text" id="searchInput" name="search_query"
+                       value="{{ search_term }}" required
+                       placeholder="Type to search..."
+                       oninput="onType(this.value)"
+                       onkeydown="onKey(event)"
+                       onfocus="onType(this.value)"
+                       onblur="hideSug()">
+                <div id="suggBox"></div>
+            </div>
+            <button type="submit">SCAN</button>
+            <button type="button" class="browse-btn" onclick="openCatalog()">CATALOGUE</button>
+        </div>
+    </form>
 
-    </div>
+    {% if error %}
+    <div class="error-msg">{{ error }}</div>
+    {% endif %}
 
+    {% if results %}
+    <div id="report-content" style="margin-top:30px;">
 
-    <div class="container">
-
-
-        <!-- MALWARE SEARCH -->
-
-        <form class="search-box" method="POST" autocomplete="off">
-
-            <input type="text" id="malwareInput" name="malware" list="malware-list" value="{{ search_term }}" required
-                autocomplete="off">
-
-            <datalist id="malware-list">
-
-                {% for name in catalog %}
-                <option value="{{ name }}">
-                    {% endfor %}
-
-            </datalist>
-
-            <button type="submit">
-                SCAN
-            </button>
-
-            <button type="button" class="browse-btn" onclick="openCatalog()">
-                BROWSE MALWARE CATALOGUE
-            </button>
-
-        </form>
-
-        <!-- ERROR -->
-
-        {% if error %}
-
-        <div class="error-msg">
-            ⚠️ {{ error }}
+     
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-val">{{ results.name }}</div>
+                <div class="stat-label">Identified Entity</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-val">{{ results.type }}</div>
+                <div class="stat-label">Category</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-val">{{ results.count }}</div>
+                <div class="stat-label">Techniques</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-val" style="font-size:1rem;word-break:break-all;">{{ results.id }}</div>
+                <div class="stat-label">MITRE ID</div>
+            </div>
         </div>
 
+        {% if results.count > 0 %}
+        <div class="severity-panel">
+            <h3 class="severity-title">Threat Severity Assessment</h3>
+            <div class="severity-bar"><div class="severity-fill" style="width:{{ results.risk_score }}%"></div></div>
+            <div class="severity-label">{{ results.risk }} RISK</div>
+        </div>
         {% endif %}
 
-
-
-        <!-- RESULTS -->
-
-        {% if results %}
-
-        <div id="report-content" style="margin-top:30px;">
-
-
-            <!-- STATS -->
-
-            <div class="stats-grid">
-
-                <div class="stat-card">
-                    <div class="stat-val">{{ results.name }}</div>
-                    <div class="stat-label">Identified Threat</div>
-                </div>
-
-                <div class="stat-card">
-                    <div class="stat-val">{{ results.count }}</div>
-                    <div class="stat-label">TTPs Extracted</div>
-                </div>
-
-                <div class="stat-card">
-                    <div class="stat-val" style="font-size:1rem;word-break:break-all;">
-                        {{ results.id }}
-                    </div>
-                    <div class="stat-label">STIX ID</div>
-                </div>
-
+      
+        <div class="intel-grid">
+        
+            <div class="intel-card">
+                <span class="cat-label">{{ results.type }} PROFILE</span>
+                {% if results.aliases != "None known" %}
+                <p><strong>Aliases:</strong> <span style="color:#b0bec5;">{{ results.aliases }}</span></p>
+                {% endif %}
+                <p style="color:#b0bec5;line-height:1.6;margin-top:8px;">{{ results.description }}</p>
+                <a href="{{ results.url }}" target="_blank"
+                   style="color:#4db6ac;text-decoration:none;font-weight:bold;display:inline-block;margin-top:12px;">
+                    View on MITRE ATT&CK →
+                </a>
             </div>
 
-            <!-- THREAT SEVERITY -->
-
-            <div class="severity-panel">
-
-                <h3 class="severity-title">
-                    Threat Severity Assessment
-                </h3>
-
-                <div class="severity-bar">
-
-                    <div class="severity-fill" style="width: {{ results.risk_score }}%">
-                    </div>
-
-                </div>
-
-                <div class="severity-label">
-
-                    {{ results.risk }} RISK
-
-                </div>
-
-            </div>
-
-            <!-- MALWARE INTELLIGENCE -->
-
-            <div class="intel-grid">
-
-                <div class="intel-card">
-
-                    <h3 class="intel-title">Malware Intelligence</h3>
-
-                    <p style="color:#b0bec5;line-height:1.6;">
-                        {{ results.description }}
-                    </p>
-
-                    <a href="{{ results.url }}" target="_blank" class="intel-link">
-                        View on MITRE ATT&CK →
-                    </a>
-
-                </div>
-
-
-                <div class="intel-card">
-
-                    <h3 class="intel-title">Threat Actors</h3>
-
-                    {% if results.actors %}
-
-                    <ul class="intel-list">
-
-                        {% for actor in results.actors %}
-
-                        <li>
-
-                            <strong>{{ actor.name }}</strong>
-
-                            <div class="intel-desc">
-                                {{ actor.description }}
-                            </div>
-
-                        </li>
-
-                        {% endfor %}
-
-                    </ul>
-
-                    {% else %}
-
-                    <div class="intel-empty">
-                        No threat actors available
-                    </div>
-
-                    {% endif %}
-
-                </div>
-
-
-                <div class="intel-card">
-
-                    <h3 class="intel-title">Attack Tools</h3>
-
-                    {% if results.tools %}
-
-                    <ul class="intel-list">
-
-                        {% for tool in results.tools %}
-
-                        <li>
-
-                            <strong>{{ tool.name }}</strong>
-
-                            <div class="intel-desc">
-                                {{ tool.description }}
-                            </div>
-
-                        </li>
-
-                        {% endfor %}
-
-                    </ul>
-
-                    {% else %}
-
-                    <div class="intel-empty">
-                        No tools available
-                    </div>
-
-                    {% endif %}
-
-                </div>
-
-            </div>
-
-            <!-- KILL CHAIN TIMELINE -->
-
-            <div class="killchain-panel">
-
-                <h3 class="killchain-title">
-                    Attack Kill Chain Timeline
-                </h3>
-
-                <div class="killchain-flow">
-
-                    {% set phases = [] %}
-
-                    {% for tech in results.techniques %}
-                    {% if tech.phase not in phases %}
-                    {% set _ = phases.append(tech.phase) %}
-                    {% endif %}
+            {% for cat_name, items in results.related.items() %}
+            <div class="intel-card">
+                <span class="cat-label">{{ cat_name | upper }} ({{ items | length }})</span>
+                <ul class="intel-list">
+                    {% for item in items %}
+                    <li>
+                        <strong>{{ item.name }}</strong>
+                        {% if item.id %}<span style="color:#555;font-size:0.75rem;"> · {{ item.id }}</span>{% endif %}
+                        <div class="hover-desc">{{ item.description }}</div>
+                    </li>
                     {% endfor %}
-
-                    {% for phase in phases %}
-
-                    <div class="kill-step">
-                        {{ phase.replace('-', ' ').title() }}
-                    </div>
-
-                    {% if not loop.last %}
-                    <div class="kill-arrow">→</div>
-                    {% endif %}
-
-                    {% endfor %}
-
-                </div>
-
+                </ul>
             </div>
-
-            <!-- DASHBOARD -->
-
-            <div class="dashboard-row">
-
-
-                <!-- CHART -->
-
-                <div class="chart-panel">
-
-                    <h3 style="color:#b0bec5;text-align:center;font-size:0.8rem;">
-                        Attack Phase Distribution
-                    </h3>
-
-                    <div style="height:300px;">
-                        <canvas id="attackChart"></canvas>
-                    </div>
-
-                </div>
-
-
-                <!-- TABLE -->
-
-                <div class="table-panel">
-
-                    <table>
-
-                        <thead>
-
-                            <tr>
-                                <th>ID</th>
-                                <th>Tactic</th>
-                                <th>Technique</th>
-                                <th>Description</th>
-                            </tr>
-
-                        </thead>
-
-                        <tbody>
-
-                            {% for tech in results.techniques %}
-
-                            <tr
-                                onclick="showDetails('{{ tech.name }}','{{ tech.id }}','{{ tech.phase }}','{{ tech.platforms }}',`{{ tech.full_desc }}`)">
-
-                                <td>{{ tech.id }}</td>
-
-                                <td>{{ tech.phase }}</td>
-
-                                <td style="font-weight:bold;color:white;">
-                                    {{ tech.name }}
-                                </td>
-
-                                <td style="color:#b0bec5;">
-                                    {{ tech.description }}
-                                </td>
-
-                            </tr>
-
-                            {% endfor %}
-
-                        </tbody>
-
-                    </table>
-
-                </div>
-
-            </div>
-
+            {% endfor %}
         </div>
 
+        {% if results.count > 0 %}
+      
+        <div class="killchain-panel">
+            <h3 class="killchain-title">Attack Kill Chain</h3>
+            <div class="killchain-flow">
+                {% set phases = [] %}
+                {% for tech in results.techniques %}
+                    {% if tech.phase not in phases %}{% set _ = phases.append(tech.phase) %}{% endif %}
+                {% endfor %}
+                {% for phase in phases %}
+                    <div class="kill-step">{{ phase.replace('-',' ').title() }}</div>
+                    {% if not loop.last %}<div class="kill-arrow">→</div>{% endif %}
+                {% endfor %}
+            </div>
+        </div>
 
-        <!-- EXPORT BUTTONS -->
+       
+        <div class="dashboard-row">
+            <div class="chart-panel">
+                <h3 style="color:#b0bec5;text-align:center;font-size:0.8rem;">Phase Distribution</h3>
+                <div style="height:300px;"><canvas id="attackChart"></canvas></div>
+            </div>
+            <div class="table-panel">
+                <table>
+                    <thead><tr><th>ID</th><th>Phase</th><th>Technique</th><th>Description</th></tr></thead>
+                    <tbody>
+                        {% for tech in results.techniques %}
+                        <tr onclick="showDetails('{{ tech.name | replace("'","\'") }}','{{ tech.id }}','{{ tech.phase }}','{{ tech.platforms }}',`{{ tech.full_desc | replace('`',"'") | replace('\n',' ') }}`)">
+                            <td>{{ tech.id }}</td>
+                            <td>{{ tech.phase }}</td>
+                            <td style="font-weight:bold;color:white;">{{ tech.name }}</td>
+                            <td style="color:#b0bec5;">{{ tech.description }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% else %}
+        <div style="text-align:center;color:#b0bec5;margin:40px 0;padding:40px;background:rgba(255,255,255,0.02);border-radius:8px;border:1px dashed rgba(255,255,255,0.1);">
+            <h3 style="color:#4db6ac;margin-bottom:10px;">No Technique Mapping Found</h3>
+            <p style="font-size:0.9rem;opacity:0.8;">Related data is shown in the cards above.</p>
+        </div>
+        {% endif %}
 
+        
         <div style="display:flex;gap:15px;margin-top:20px;margin-bottom:50px;">
-
-            <button onclick="downloadDashboard()"
-                style="background:#26a69a;flex:1;border:none;height:50px;color:white;font-weight:bold;cursor:pointer;">
-                📸 SAVE DASHBOARD PDF
-            </button>
-
+            <button onclick="downloadDashboard()" style="background:#26a69a;flex:1;border:none;height:50px;color:white;font-weight:bold;cursor:pointer;">SAVE DASHBOARD PDF</button>
             <a href="{{ url_for('download_playbook', name=results.name) }}" style="flex:1;">
-
-                <button
-                    style="background:#800000;width:100%;border:none;height:50px;color:white;font-weight:bold;cursor:pointer;">
-                    📄 DOWNLOAD PLAYBOOK PDF
-                </button>
-
+                <button style="background:#800000;width:100%;border:none;height:50px;color:white;font-weight:bold;cursor:pointer;">DOWNLOAD PLAYBOOK PDF</button>
             </a>
+        </div>
+    </div>
+    {% endif %}
+</div>
 
+
+<div id="catalogModal" class="modal">
+    <div class="modal-content" style="width:70%;max-width:700px;">
+        <div class="modal-header">
+            <span class="close" onclick="closeCatalog()">&times;</span>
+            <h2 style="margin:0;color:#800000;">Catalogue</h2>
         </div>
 
-        {% endif %}
-
-    </div>
-
-
-
-    <!-- MALWARE CATALOG -->
-
-    <div id="catalogModal" class="modal">
-
-        <div class="modal-content">
-
-            <div class="modal-header">
-
-                <span class="close" onclick="closeCatalog()">&times;</span>
-
-                <h2 style="margin:0;color:#800000;">
-                    Malware Catalogue
-                </h2>
-
+    
+        <div class="modal-cat-tabs" id="modalCatTabs">
+            {% for cat in category_order %}
+            <div class="modal-cat-tab {% if loop.first %}active{% endif %}"
+                 data-cat="{{ cat }}" onclick="switchModalCat('{{ cat }}', this)">
+                {{ cat | upper }}
+                <span style="color:#555;font-size:0.6rem;">({{ catalog[cat] | length }})</span>
             </div>
-
-            <div style="max-height:400px;overflow-y:auto;">
-
-                {% for name in catalog %}
-
-                <div class="catalog-item" onclick="selectMalware('{{ name }}')">
-                    {{ name }}
-                </div>
-
-                {% endfor %}
-
-            </div>
-
+            {% endfor %}
         </div>
 
-    </div>
-
-
-
-    <!-- GLOSSARY -->
-
-    <div id="glossaryModal" class="modal">
-
-        <div class="modal-content">
-
-            <div class="modal-header">
-
-                <span class="close" onclick="closeGlossary()">&times;</span>
-
-                <h2 style="margin:0;color:#26a69a;">
-                    Threat Glossary
-                </h2>
-
-            </div>
-
-            <div style="padding:20px;">
-
-                {% for term, definition in glossary.items() %}
-
-                <div style="margin-bottom:15px;">
-
-                    <div style="color:#800000;font-weight:bold;">
-                        {{ term }}
-                    </div>
-
-                    <div style="color:#eceff1;">
-                        {{ definition }}
-                    </div>
-
-                </div>
-
-                {% endfor %}
-
-            </div>
-
+ 
+        <div class="modal-search">
+            <input type="text" id="catalogSearch" placeholder="Filter..." oninput="filterCatalog(this.value)">
         </div>
 
-    </div>
+        <div class="catalog-count" id="catalogCount"></div>
 
-
-
-    <!-- TECHNIQUE DETAILS -->
-
-    <div id="detailsModal" class="modal">
-
-        <div class="modal-content">
-
-            <div class="modal-header" style="background:#004d40;">
-
-                <span class="close" onclick="closeDetails()">&times;</span>
-
-                <h2 id="modalTitle" style="margin:0;color:white;">
-                    Technique
-                </h2>
-
-            </div>
-
-            <div style="padding:20px;">
-
-                <p><strong>ID:</strong> <span id="modalID"></span></p>
-
-                <p><strong>Phase:</strong>
-                    <span id="modalPhase" style="color:#26a69a;"></span>
-                </p>
-
-                <p><strong>Platforms:</strong>
-                    <span id="modalPlatforms"></span>
-                </p>
-
-                <hr>
-
-                <p id="modalDesc" style="line-height:1.6;"></p>
-
-            </div>
-
+  
+        <div id="catalogList" style="max-height:420px;overflow-y:auto;">
         </div>
-
     </div>
+</div>
+
+
+<div id="glossaryModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <span class="close" onclick="closeGlossary()">&times;</span>
+            <h2 style="margin:0;color:#26a69a;">Threat Glossary</h2>
+        </div>
+        <div style="padding:20px;">
+            {% for term, definition in glossary.items() %}
+            <div style="margin-bottom:15px;">
+                <div style="color:#800000;font-weight:bold;">{{ term }}</div>
+                <div style="color:#eceff1;">{{ definition }}</div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
 
 
 
-    <script>
+<div id="detailsModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header" style="background:#004d40;">
+            <span class="close" onclick="closeDetails()">&times;</span>
+            <h2 id="modalTitle" style="margin:0;color:white;"></h2>
+        </div>
+        <div style="padding:20px;">
+            <p><strong>ID:</strong> <span id="modalID"></span></p>
+            <p><strong>Phase:</strong> <span id="modalPhase" style="color:#26a69a;"></span></p>
+            <p><strong>Platforms:</strong> <span id="modalPlatforms"></span></p>
+            <hr>
+            <p id="modalDesc" style="line-height:1.6;color:#b0bec5;"></p>
+        </div>
+    </div>
+</div>
 
-        let chartDataRaw = {{ results.chart_data | tojson if results else '{}' }};
-        let threatName = "{{ results.name if results else '' }}";
 
-    </script>
+<script>
+
+const CATALOG = {{ catalog | tojson }};
+const CATEGORY_ORDER = {{ category_order | tojson }};
+let chartDataRaw = {{ results.chart_data | tojson if results else '{}' }};
+let threatName = "{{ results.name if results else '' }}";
 
 
-    <script src="static/scripts.js"></script>
+let currentCat = 'Auto';
+let suggestions = [];
+let hiIdx = -1;
+let modalCat = CATEGORY_ORDER[0];
 
+
+function selectCat(el) {
+    document.querySelectorAll('.cat-tab').forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+    currentCat = el.dataset.cat;
+    document.getElementById('categoryInput').value = currentCat;
+    document.getElementById('searchInput').value = '';
+    hideSug();
+}
+
+function buildPool() {
+    let pool = [];
+    const cats = currentCat === 'Auto' ? CATEGORY_ORDER : [currentCat];
+    for (const cat of cats) {
+        (CATALOG[cat] || []).forEach(name => pool.push({ name, cat }));
+    }
+    return pool;
+}
+
+function onType(val) {
+    const box = document.getElementById('suggBox');
+    const q = val.toLowerCase().trim();
+    const pool = buildPool();
+
+    if (!q) {
+        suggestions = pool.slice(0, 40);
+    } else {
+        suggestions = pool.filter(e => e.name.toLowerCase().includes(q)).slice(0, 50);
+    }
+
+    if (!suggestions.length) { box.style.display = 'none'; return; }
+
+    box.innerHTML = suggestions.map((e, i) =>
+        `<div class="sug-item" onmousedown="pickSug(${i})">
+            <span>${e.name}</span>
+            <span class="sug-badge">${e.cat}</span>
+        </div>`
+    ).join('');
+    hiIdx = -1;
+    box.style.display = 'block';
+}
+
+function pickSug(i) {
+    const s = suggestions[i];
+    document.getElementById('searchInput').value = s.name;
+    // switch category tab to match
+    const tab = document.querySelector(`.cat-tab[data-cat="${s.cat}"]`);
+    if (tab && currentCat === 'Auto') {
+        // keep Auto — let backend resolve
+    }
+    hideSug();
+}
+
+function hideSug() {
+    setTimeout(() => { document.getElementById('suggBox').style.display = 'none'; }, 160);
+}
+
+function onKey(e) {
+    const items = document.querySelectorAll('.sug-item');
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        hiIdx = Math.min(hiIdx + 1, items.length - 1);
+        items.forEach((el, i) => el.classList.toggle('hi', i === hiIdx));
+        if (items[hiIdx]) document.getElementById('searchInput').value = suggestions[hiIdx].name;
+    } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        hiIdx = Math.max(hiIdx - 1, 0);
+        items.forEach((el, i) => el.classList.toggle('hi', i === hiIdx));
+        if (items[hiIdx]) document.getElementById('searchInput').value = suggestions[hiIdx].name;
+    } else if (e.key === 'Escape') {
+        hideSug();
+    }
+}
+
+
+function openCatalog() {
+    document.getElementById('catalogModal').style.display = 'block';
+    document.getElementById('catalogSearch').value = '';
+    renderCatalogList('');
+    updateCatalogCount('');
+}
+function closeCatalog() { document.getElementById('catalogModal').style.display = 'none'; }
+
+function switchModalCat(cat, el) {
+    modalCat = cat;
+    document.querySelectorAll('.modal-cat-tab').forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+    const q = document.getElementById('catalogSearch').value;
+    renderCatalogList(q);
+    updateCatalogCount(q);
+}
+
+function filterCatalog(val) {
+    renderCatalogList(val);
+    updateCatalogCount(val);
+}
+
+function renderCatalogList(filter) {
+    const list = document.getElementById('catalogList');
+    const items = (CATALOG[modalCat] || []).filter(n =>
+        !filter || n.toLowerCase().includes(filter.toLowerCase())
+    );
+    list.innerHTML = items.map(name =>
+        `<div class="catalog-item" onclick="selectCatalogEntry('${name.replace(/'/g,"\\'")}', '${modalCat}')">${name}</div>`
+    ).join('') || '<div style="padding:20px;color:#b0bec5;text-align:center;">No entries found</div>';
+}
+
+function updateCatalogCount(filter) {
+    const items = (CATALOG[modalCat] || []).filter(n =>
+        !filter || n.toLowerCase().includes(filter.toLowerCase())
+    );
+    document.getElementById('catalogCount').textContent = `${items.length} entries`;
+}
+
+function selectCatalogEntry(name, cat) {
+
+    document.getElementById('searchInput').value = name;
+
+    const tab = document.querySelector(`.cat-tab[data-cat="${cat}"]`);
+    if (tab) selectCat(tab);
+
+    closeCatalog();
+
+  
+    setTimeout(() => { document.getElementById('mainForm').submit(); }, 80);
+}
+
+
+function openGlossary() { document.getElementById('glossaryModal').style.display = 'block'; }
+function closeGlossary() { document.getElementById('glossaryModal').style.display = 'none'; }
+
+function showDetails(name, id, phase, platforms, desc) {
+    document.getElementById('modalTitle').textContent = name;
+    document.getElementById('modalID').textContent = id;
+    document.getElementById('modalPhase').textContent = phase;
+    document.getElementById('modalPlatforms').textContent = platforms;
+    document.getElementById('modalDesc').textContent = desc;
+    document.getElementById('detailsModal').style.display = 'block';
+}
+function closeDetails() { document.getElementById('detailsModal').style.display = 'none'; }
+
+window.onclick = e => {
+    if (e.target.classList.contains('modal')) { closeCatalog(); closeGlossary(); closeDetails(); }
+};
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { closeCatalog(); closeGlossary(); closeDetails(); }
+});
+
+
+document.addEventListener('DOMContentLoaded', () => {
+    const canvas = document.getElementById('attackChart');
+    if (canvas && Object.keys(chartDataRaw).length) {
+        new Chart(canvas.getContext('2d'), {
+            type: 'doughnut',
+            data: {
+                labels: Object.keys(chartDataRaw),
+                datasets: [{ data: Object.values(chartDataRaw),
+                    backgroundColor: ['#800000','#26a69a','#ff3333','#004d40','#b0bec5','#4d0000'],
+                    borderColor: '#050505', borderWidth: 2 }]
+            },
+            options: { responsive:true, maintainAspectRatio:false,
+                plugins: { legend: { position:'bottom', labels: { color:'#b0bec5', font:{size:10} } } } }
+        });
+    }
+});
+
+
+function downloadDashboard() {
+    const el = document.getElementById('report-content');
+    if (!el) return;
+    html2pdf().from(el).set({
+        margin: 0.5, filename: `${threatName}_Dashboard.pdf`,
+        html2canvas: { scale:2, backgroundColor:'#050505' },
+        jsPDF: { orientation:'landscape' }
+    }).save();
+}
+</script>
 </body>
-
 </html>

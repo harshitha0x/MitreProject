@@ -1,12 +1,6 @@
-// ===============================
-// PAGE LOAD
-// ===============================
 
 document.addEventListener("DOMContentLoaded", function () {
 
-    // ===============================
-    // ATTACK CHART
-    // ===============================
 
     if (typeof chartDataRaw !== "undefined") {
 
@@ -60,9 +54,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
 
-    // ===============================
-    // TECHNIQUE ROW CLICK HANDLER
-    // ===============================
+
 
     const rows = document.querySelectorAll(".tech-row");
 
@@ -86,9 +78,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
 
 
-// ===============================
-// EXPORT DASHBOARD
-// ===============================
 
 function downloadDashboard() {
 
@@ -115,9 +104,6 @@ function downloadDashboard() {
 
 
 
-// ===============================
-// CATALOG MODAL
-// ===============================
 
 function openCatalog() {
 
@@ -147,9 +133,6 @@ function selectMalware(name) {
 
 
 
-// ===============================
-// GLOSSARY MODAL
-// ===============================
 
 function openGlossary() {
 
@@ -169,9 +152,6 @@ function closeGlossary() {
 
 
 
-// ===============================
-// DETAILS POPUP
-// ===============================
 
 function showDetails(name, id, phase, platforms, desc) {
 
@@ -199,9 +179,6 @@ function closeDetails() {
 
 
 
-// ===============================
-// CLICK OUTSIDE CLOSE
-// ===============================
 
 window.onclick = function (event) {
 
@@ -217,9 +194,6 @@ window.onclick = function (event) {
 
 
 
-// ===============================
-// ESC KEY CLOSE
-// ===============================
 
 document.addEventListener("keydown", function(e){
 

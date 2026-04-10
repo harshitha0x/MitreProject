@@ -1,9 +1,7 @@
-/* ---------------- FONTS ---------------- */
 
 @import url('https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&family=Montserrat:wght@500;700;900&display=swap');
 
 
-/* ---------------- ROOT COLORS ---------------- */
 
 :root {
 
@@ -24,7 +22,6 @@
 }
 
 
-/* ---------------- BODY ---------------- */
 
 body {
 
@@ -45,7 +42,7 @@ min-height:100vh;
 }
 
 
-/* ---------------- HEADER ---------------- */
+
 
 .header{
 
@@ -97,7 +94,6 @@ text-transform:uppercase;
 }
 
 
-/* ---------------- BUTTONS ---------------- */
 
 .glossary-btn{
 
@@ -168,9 +164,6 @@ box-shadow:0 0 15px var(--accent-glow);
 
 }
 
-
-/* ---------------- CONTAINER ---------------- */
-
 .container{
 
 width:95%;
@@ -181,7 +174,7 @@ padding:0 20px 50px 20px;
 }
 
 
-/* ---------------- SEARCH ---------------- */
+
 
 .search-box{
 
@@ -236,8 +229,6 @@ background:var(--primary-hover);
 
 }
 
-
-/* ---------------- API PANELS ---------------- */
 
 .api-row{
 
@@ -370,7 +361,7 @@ font-size:1.2rem;
 
 display:grid;
 
-grid-template-columns:repeat(3,1fr);
+grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
 
 gap:20px;
 
@@ -590,8 +581,6 @@ padding-left:35px;
 
 }
 
-/* ---------------- KILL CHAIN ---------------- */
-
 .killchain-panel{
 
 background:var(--card);
@@ -659,8 +648,6 @@ color:var(--accent);
 font-size:1.2rem;
 
 }
-
-/* ---------------- THREAT SEVERITY ---------------- */
 
 .severity-panel{
 

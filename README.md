@@ -74,3 +74,4 @@ http://127.0.0.1:5000
 4. Click any item for detailed popup  
 
 5. Export dashboard or download report if needed  
+

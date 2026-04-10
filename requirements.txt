@@ -55,3 +55,7 @@ Werkzeug==3.1.6
 wheel==0.46.3
 xlsxwriter==3.2.9
 yarl==1.23.0
+fastapi
+PyYAML
+Requests
+uvicorn
